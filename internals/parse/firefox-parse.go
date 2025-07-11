@@ -1,0 +1,5 @@
+package parse
+
+func ParseFirefoxHistory() {
+
+}
