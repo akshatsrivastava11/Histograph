@@ -35,7 +35,6 @@ func NewModel() model {
 	l.Title = "Choose your browser"
 	vp := viewport.New(40, 20)
 	vp.SetContent(l.View())
-
 	return model{list: l, viewport: vp}
 }
 
@@ -64,9 +63,11 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 func (m model) View() string {
 	if m.done {
-		return fmt.Sprintf("You chose: %s\n", m.selected)
+		return cardStyle.Render(fmt.Sprintf("You chose: %s", m.selected))
 	}
-	return m.viewport.View()
+
+	// wrap the list view in the card style
+	return cardStyle.Render(m.list.View())
 }
 
 func GetUserBrowserChoice() (string, error) {

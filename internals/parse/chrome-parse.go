@@ -56,8 +56,6 @@ func ParseChromeHistory() []types.VisitEntry {
 		convertedTime := chromeTimeToUnix(visitTime)
 
 		// Print for debug/logging
-		fmt.Printf("Visited: %s\nTitle: %s\nCount: %d\nTime: %s\n\n",
-			url, title, visitCount, convertedTime.Format(time.RFC3339))
 
 		// Add to result slice
 		history = append(history, types.VisitEntry{
