@@ -4,6 +4,8 @@ package render
 import (
 	"fmt"
 
+	"github.com/charmbracelet/bubbles/viewport"
+
 	"github.com/charmbracelet/bubbles/list"
 	tea "github.com/charmbracelet/bubbletea"
 )
@@ -21,6 +23,7 @@ type model struct {
 	list     list.Model
 	selected string
 	done     bool
+	viewport viewport.Model
 }
 
 func NewModel() model {
@@ -30,7 +33,10 @@ func NewModel() model {
 	}
 	l := list.New(items, list.NewDefaultDelegate(), 30, 10)
 	l.Title = "Choose your browser"
-	return model{list: l}
+	vp := viewport.New(40, 20)
+	vp.SetContent(l.View())
+
+	return model{list: l, viewport: vp}
 }
 
 func (m model) Init() tea.Cmd {
@@ -52,6 +58,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 	var cmd tea.Cmd
 	m.list, cmd = m.list.Update(msg)
+	m.viewport.SetContent(m.list.View())
 	return m, cmd
 }
 
@@ -59,7 +66,7 @@ func (m model) View() string {
 	if m.done {
 		return fmt.Sprintf("You chose: %s\n", m.selected)
 	}
-	return m.list.View()
+	return m.viewport.View()
 }
 
 func GetUserBrowserChoice() (string, error) {
