@@ -3,20 +3,25 @@ package parse
 import (
 	"database/sql"
 	"fmt"
-	_ "github.com/mattn/go-sqlite3" // make sure this is imported in the same file
 	"log"
 	"time"
+
+	"github.com/akshatsrivastava11/Histograph/internals/types" // Replace `project` with your actual module name
+
+	_ "github.com/mattn/go-sqlite3" // Required for sqlite
 )
 
+// Converts Chrome's Webkit timestamp to Unix time
 func chromeTimeToUnix(microseconds int64) time.Time {
-	// WebKit epoch offset to Unix (in seconds)
 	const offset = 11644473600
 	seconds := microseconds/1000000 - offset
 	return time.Unix(seconds, 0)
 }
 
-func ParseChromeHistory() {
+// ParseChromeHistory connects to Chrome's history database and returns a slice of VisitEntry
+func ParseChromeHistory() []types.VisitEntry {
 	fmt.Println("Parsing Chrome's History")
+
 	db, err := sql.Open("sqlite3", "/home/zeek1108/.config/google-chrome/Default/History")
 	if err != nil {
 		log.Fatal(err)
@@ -34,6 +39,9 @@ func ParseChromeHistory() {
 		log.Fatal(err)
 	}
 	defer rows.Close()
+
+	var history []types.VisitEntry
+
 	for rows.Next() {
 		var url string
 		var title string
@@ -45,8 +53,20 @@ func ParseChromeHistory() {
 			log.Fatal(err)
 		}
 
+		convertedTime := chromeTimeToUnix(visitTime)
+
+		// Print for debug/logging
 		fmt.Printf("Visited: %s\nTitle: %s\nCount: %d\nTime: %s\n\n",
-			url, title, visitCount, chromeTimeToUnix(visitTime).Format(time.RFC3339))
+			url, title, visitCount, convertedTime.Format(time.RFC3339))
+
+		// Add to result slice
+		history = append(history, types.VisitEntry{
+			URL:        url,
+			Title:      title,
+			VisitCount: visitCount,
+			VisitTime:  convertedTime,
+		})
 	}
 
+	return history
 }
