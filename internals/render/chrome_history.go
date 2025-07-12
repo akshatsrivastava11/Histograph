@@ -33,7 +33,6 @@ type ChromeHistoryModel struct {
 
 // Styles for the UI
 var (
-	
 	titleStyle = lipgloss.NewStyle().
 			Foreground(lipgloss.Color("#FAFAFA")).
 			Background(lipgloss.Color("#7D56F4")).
@@ -51,7 +50,6 @@ var (
 			BorderForeground(lipgloss.Color("#874BFD")).
 			Padding(1, 2).
 			MarginBottom(1)
-			
 
 	highlightStyle = lipgloss.NewStyle().
 			Foreground(lipgloss.Color("#EE6FF8")).
@@ -70,7 +68,7 @@ var (
 // NewChromeHistoryModel creates a new Chrome history visualization model
 func NewChromeHistoryModel(historyData []VisitEntry, width, height int) ChromeHistoryModel {
 	vp := viewport.New(70-4, 100-6)
-	
+
 	m := ChromeHistoryModel{
 		viewport:     vp,
 		historyData:  historyData,
@@ -187,7 +185,7 @@ func (m ChromeHistoryModel) renderOverview() string {
 		domain := extractDomain(entry.URL)
 		domains[domain]++
 	}
-	
+
 	// Create overview content
 	stats := fmt.Sprintf("📊 Total Entries: %d\n", totalVisits) +
 		fmt.Sprintf("🔄 Total Visits: %d\n", totalVisitCount) +
@@ -326,7 +324,6 @@ func (m ChromeHistoryModel) renderDetails() string {
 	if len(m.historyData) == 0 {
 		return cardStyle.Render("No detailed data available")
 	}
-	
 
 	// Show detailed view of recent entries
 	var content strings.Builder

@@ -31,7 +31,7 @@ func NewModel() model {
 		browserItem{name: "Chrome", desc: "Google Chrome history file"},
 		browserItem{name: "Firefox", desc: "Mozilla Firefox history file"},
 	}
-	l := list.New(items, list.NewDefaultDelegate(), 30, 10)
+	l := list.New(items, list.NewDefaultDelegate(), 120, 40)
 	l.Title = "Choose your browser"
 	vp := viewport.New(40, 20)
 	vp.SetContent(l.View())
