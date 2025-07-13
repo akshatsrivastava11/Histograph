@@ -6,9 +6,9 @@ import (
 	"log"
 	"time"
 
-	"github.com/akshatsrivastava11/Histograph/internals/types" // Replace `project` with your actual module name
+	"github.com/akshatsrivastava11/Histograph/internals/types"
 
-	_ "github.com/mattn/go-sqlite3" // Required for sqlite
+	_ "github.com/mattn/go-sqlite3"
 )
 
 // Converts Chrome's Webkit timestamp to Unix time
@@ -54,8 +54,6 @@ func ParseChromeHistory() []types.VisitEntry {
 		}
 
 		convertedTime := chromeTimeToUnix(visitTime)
-
-		// Print for debug/logging
 
 		// Add to result slice
 		history = append(history, types.VisitEntry{
