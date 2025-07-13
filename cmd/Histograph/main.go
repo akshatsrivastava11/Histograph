@@ -4,22 +4,16 @@ package main
 import (
 	"fmt"
 	"log"
-	"time"
+	"os"
 
 	"github.com/akshatsrivastava11/Histograph/internals/parse"
 	"github.com/akshatsrivastava11/Histograph/internals/render"
+	"github.com/akshatsrivastava11/Histograph/internals/types"
+	"github.com/charmbracelet/bubbles/spinner"
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 )
-
-// VisitEntry represents a browser history entry
-type VisitEntry struct {
-	URL        string    `json:"url"`
-	Title      string    `json:"title"`
-	VisitCount int       `json:"visit_count"`
-	VisitTime  time.Time `json:"visit_time"`
-}
 
 // Styles
 var (
@@ -59,26 +53,34 @@ type historyModel struct {
 	content       string
 	done          bool
 	err           error
+	spinner       spinner.Model
+	loading       bool
 }
 
 func newHistoryModel(browserChoice string) historyModel {
 	vp := viewport.New(80, 20)
+	sp := spinner.New()
+	sp.Style = lipgloss.NewStyle().Foreground(lipgloss.Color("205")).Bold(true)
 
 	content := titleStyle.Render("🔍 Fetching " + browserChoice + " history...")
-
+	// timer.New(10000).Init()
 	return historyModel{
 		browserChoice: browserChoice,
 		viewport:      vp,
 		content:       content,
 		done:          false,
+		spinner:       sp,
+		loading:       true,
 	}
 }
 
 func (m historyModel) Init() tea.Cmd {
 	return tea.Batch(
 		tea.EnterAltScreen,
+		m.spinner.Tick,
 		processHistoryCmd(m.browserChoice),
 	)
+	// return nil
 }
 
 // Command to process browser history
@@ -96,57 +98,41 @@ func processHistoryCmd(browserChoice string) tea.Cmd {
 }
 
 type historyResult struct {
-	entries []render.VisitEntry
+	entries []types.VisitEntry
 	count   int
 	err     error
 }
 
 func processChromeHistory() historyResult {
-	historyData := parse.ParseChromeHistory()
-
+	historyData, err := parse.ParseChromeHistory()
+	if err != nil {
+		return historyResult{err: err}
+	}
 	if len(historyData) == 0 {
 		return historyResult{
 			err: fmt.Errorf("no Chrome history found or unable to access Chrome history"),
 		}
 	}
 
-	var renderEntries []render.VisitEntry
-	for _, entry := range historyData {
-		renderEntries = append(renderEntries, render.VisitEntry{
-			URL:        entry.URL,
-			Title:      entry.Title,
-			VisitCount: entry.VisitCount,
-			VisitTime:  entry.VisitTime,
-		})
-	}
-
 	return historyResult{
-		entries: renderEntries,
+		entries: historyData,
 		count:   len(historyData),
 	}
 }
 
 func processFirefoxHistory() historyResult {
-	historyData := parse.ParseFirefoxHistory()
-
+	historyData, err := parse.ParseFirefoxHistory()
+	if err != nil {
+		return historyResult{err: err}
+	}
 	if len(historyData) == 0 {
 		return historyResult{
 			err: fmt.Errorf("no Firefox history found or unable to access Firefox history"),
 		}
 	}
 
-	var renderEntries []render.VisitEntry
-	for _, entry := range historyData {
-		renderEntries = append(renderEntries, render.VisitEntry{
-			URL:        entry.URL,
-			Title:      entry.Title,
-			VisitCount: entry.VisitCount,
-			VisitTime:  entry.VisitTime,
-		})
-	}
-
 	return historyResult{
-		entries: renderEntries,
+		entries: historyData,
 		count:   len(historyData),
 	}
 }
@@ -159,6 +145,14 @@ func (m historyModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if m.done {
 				return m, tea.Quit
 			}
+			if m.err != nil {
+				// Retry fetching history
+				m.done = false
+				m.err = nil
+				m.loading = true
+				m.content = titleStyle.Render("🔍 Fetching " + m.browserChoice + " history...")
+				return m, tea.Batch(m.spinner.Tick, processHistoryCmd(m.browserChoice))
+			}
 		case "q", "ctrl+c":
 			return m, tea.Quit
 		}
@@ -166,24 +160,26 @@ func (m historyModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case historyResult:
 		if msg.err != nil {
 			m.content = errorStyle.Render("❌ Error: "+msg.err.Error()) + "\n\n" +
-				infoStyle.Render("Make sure your browser is closed and try again.") + "\n\n" +
-				promptStyle.Render("Press 'q' to quit or 'enter' to continue")
+				infoStyle.Render("Make sure your browser is closed and try again. If you see a 'database is locked' error, close your browser and retry.") + "\n\n" +
+				promptStyle.Render("Press 'q' to quit or 'enter' to retry")
 			m.err = msg.err
 			m.done = true
+			m.loading = false
 		} else {
 			m.content = successStyle.Render(fmt.Sprintf("✅ Found %d history entries", msg.count)) + "\n\n" +
 				infoStyle.Render("🚀 Starting "+m.browserChoice+" History Visualizer...") + "\n\n" +
 				promptStyle.Render("Press 'enter' to continue or 'q' to quit")
-
+			// timer.New(20000000).Init()
 			// Start the visualizer
 			go func() {
 				err := render.RunChromeHistoryViewer(msg.entries)
 				if err != nil {
-					log.Printf("Error running history visualizer: %v", err)
+					debugLog("Error running history visualizer: %v", err)
 				}
 			}()
 
 			m.done = true
+			m.loading = false
 		}
 		m.viewport.SetContent(m.content)
 		return m, nil
@@ -193,6 +189,13 @@ func (m historyModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.viewport.Height = msg.Height
 		m.viewport.SetContent(m.content)
 		return m, nil
+
+	case spinner.TickMsg:
+		if m.loading {
+			var cmd tea.Cmd
+			m.spinner, cmd = m.spinner.Update(msg)
+			return m, cmd
+		}
 	}
 
 	var cmd tea.Cmd
@@ -206,21 +209,34 @@ func (m historyModel) View() string {
 		return cardStyle.Render(m.viewport.View() + footer)
 	}
 
+	if m.loading {
+		spinnerView := m.spinner.View() + " " + titleStyle.Render("Fetching "+m.browserChoice+" history...")
+		return cardStyle.Render(spinnerView)
+	}
 	return cardStyle.Render(m.viewport.View())
+}
+
+// debugLog prints debug output only if HISTOGRAPH_DEBUG=1 is set in the environment.
+func debugLog(format string, v ...interface{}) {
+	if os.Getenv("HISTOGRAPH_DEBUG") == "1" {
+		log.Printf(format, v...)
+	}
 }
 
 func main() {
 	// Get user's browser choice
 	choice, err := render.GetUserBrowserChoice()
 	if err != nil {
-		log.Fatal("Error getting browser choice:", err)
+		fmt.Println("Error getting browser choice:", err)
+		return
 	}
 
 	// Create and run the history processing model
 	model := newHistoryModel(choice)
+	// time.Sleep(3 * time.Second)
 	prog := tea.NewProgram(model)
 
 	if _, err := prog.Run(); err != nil {
-		log.Fatal("Error running program:", err)
+		fmt.Println("Error running program:", err)
 	}
 }

@@ -5,25 +5,17 @@ import (
 	"fmt"
 	"sort"
 	"strings"
-	"time"
 
+	"github.com/akshatsrivastava11/Histograph/internals/types"
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 )
 
-// VisitEntry represents a browser history entry
-type VisitEntry struct {
-	URL        string    `json:"url"`
-	Title      string    `json:"title"`
-	VisitCount int       `json:"visit_count"`
-	VisitTime  time.Time `json:"visit_time"`
-}
-
 // ChromeHistoryModel represents the state for Chrome history visualization
 type ChromeHistoryModel struct {
 	viewport     viewport.Model
-	historyData  []VisitEntry
+	historyData  []types.VisitEntry
 	currentView  string // "overview", "timeline", "sites", "details"
 	selectedItem int
 	ready        bool
@@ -66,7 +58,7 @@ var (
 )
 
 // NewChromeHistoryModel creates a new Chrome history visualization model
-func NewChromeHistoryModel(historyData []VisitEntry, width, height int) ChromeHistoryModel {
+func NewChromeHistoryModel(historyData []types.VisitEntry, width, height int) ChromeHistoryModel {
 	vp := viewport.New(70-4, 100-6)
 
 	m := ChromeHistoryModel{
@@ -206,7 +198,7 @@ func (m ChromeHistoryModel) renderTimeline() string {
 	}
 
 	// Group visits by date
-	dateGroups := make(map[string][]VisitEntry)
+	dateGroups := make(map[string][]types.VisitEntry)
 	for _, entry := range m.historyData {
 		date := entry.VisitTime.Format("2006-01-02")
 		dateGroups[date] = append(dateGroups[date], entry)
@@ -330,7 +322,7 @@ func (m ChromeHistoryModel) renderDetails() string {
 	content.WriteString(headerStyle.Render("🔍 Recent History Details") + "\n\n")
 
 	// Sort by visit time (most recent first)
-	sortedEntries := make([]VisitEntry, len(m.historyData))
+	sortedEntries := make([]types.VisitEntry, len(m.historyData))
 	copy(sortedEntries, m.historyData)
 	sort.Slice(sortedEntries, func(i, j int) bool {
 		return sortedEntries[i].VisitTime.After(sortedEntries[j].VisitTime)
@@ -451,7 +443,7 @@ func truncateString(s string, length int) string {
 }
 
 // RunChromeHistoryViewer starts the Chrome history visualization
-func RunChromeHistoryViewer(historyData []VisitEntry) error {
+func RunChromeHistoryViewer(historyData []types.VisitEntry) error {
 	m := NewChromeHistoryModel(historyData, 120, 40)
 	p := tea.NewProgram(m, tea.WithAltScreen())
 	_, err := p.Run()

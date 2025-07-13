@@ -3,9 +3,9 @@ package parse
 import (
 	"database/sql"
 	"fmt"
-	"log"
 	"os"
 	"path/filepath"
+	"runtime"
 	"time"
 
 	"github.com/akshatsrivastava11/Histograph/internals/types"
@@ -18,38 +18,55 @@ func firefoxTimeToUnix(microseconds int64) time.Time {
 }
 
 // Get the path to the first available Firefox profile
-func getFirefoxHistoryPath() string {
-	homeDir, err := os.UserHomeDir()
-	if err != nil {
-		log.Fatal("Failed to get home dir:", err)
+func GetFirefoxHistoryPath() (string, error) {
+	// Allow override via environment variable
+	if envPath := os.Getenv("FIREFOX_HISTORY_PATH"); envPath != "" {
+		return envPath, nil
 	}
 
-	// Find the profile dir inside ~/.mozilla/firefox
-	profilesDir := filepath.Join(homeDir, ".mozilla", "firefox")
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		return "", fmt.Errorf("failed to get home dir: %w", err)
+	}
+
+	var profilesDir string
+	switch runtime.GOOS {
+	case "linux":
+		profilesDir = filepath.Join(homeDir, ".mozilla", "firefox")
+	case "darwin":
+		profilesDir = filepath.Join(homeDir, "Library", "Application Support", "Firefox", "Profiles")
+	case "windows":
+		profilesDir = filepath.Join(homeDir, "AppData", "Roaming", "Mozilla", "Firefox", "Profiles")
+	default:
+		return "", fmt.Errorf("unsupported OS: %s", runtime.GOOS)
+	}
+
 	dirs, err := os.ReadDir(profilesDir)
 	if err != nil {
-		log.Fatal("Failed to read firefox profile dir:", err)
+		return "", fmt.Errorf("failed to read firefox profile dir: %w", err)
 	}
 
 	for _, d := range dirs {
-		if d.IsDir() && filepath.Ext(d.Name()) == ".default-release" {
-			return filepath.Join(profilesDir, d.Name(), "places.sqlite")
+		if d.IsDir() && (filepath.Ext(d.Name()) == ".default-release" || filepath.Ext(d.Name()) == ".default") {
+			return filepath.Join(profilesDir, d.Name(), "places.sqlite"), nil
 		}
 	}
 
-	log.Fatal("Could not find Firefox default-release profile")
-	return ""
+	return "", fmt.Errorf("could not find Firefox default(-release) profile")
 }
 
 // ParseFirefoxHistory connects to Firefox's history database and returns recent visits
-func ParseFirefoxHistory() []types.VisitEntry {
+func ParseFirefoxHistory() ([]types.VisitEntry, error) {
 	fmt.Println("Parsing Firefox History")
 
-	historyPath := getFirefoxHistoryPath()
+	historyPath, err := GetFirefoxHistoryPath()
+	if err != nil {
+		return nil, err
+	}
 
 	db, err := sql.Open("sqlite3", historyPath)
 	if err != nil {
-		log.Fatal(err)
+		return nil, fmt.Errorf("failed to open Firefox history database: %w", err)
 	}
 	defer db.Close()
 
@@ -61,7 +78,7 @@ func ParseFirefoxHistory() []types.VisitEntry {
 		LIMIT 20;
 	`)
 	if err != nil {
-		log.Fatal(err)
+		return nil, fmt.Errorf("failed to query Firefox history: %w", err)
 	}
 	defer rows.Close()
 
@@ -75,13 +92,10 @@ func ParseFirefoxHistory() []types.VisitEntry {
 
 		err = rows.Scan(&url, &title, &visitCount, &visitTime)
 		if err != nil {
-			log.Fatal(err)
+			return nil, fmt.Errorf("failed to scan Firefox history row: %w", err)
 		}
 
 		convertedTime := firefoxTimeToUnix(visitTime)
-
-		fmt.Printf("Visited: %s\nTitle: %s\nCount: %d\nTime: %s\n\n",
-			url, title, visitCount, convertedTime.Format(time.RFC3339))
 
 		history = append(history, types.VisitEntry{
 			URL:        url,
@@ -91,5 +105,5 @@ func ParseFirefoxHistory() []types.VisitEntry {
 		})
 	}
 
-	return history
+	return history, nil
 }

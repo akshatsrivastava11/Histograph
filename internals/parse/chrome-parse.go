@@ -3,7 +3,9 @@ package parse
 import (
 	"database/sql"
 	"fmt"
-	"log"
+	"os"
+	"path/filepath"
+	"runtime"
 	"time"
 
 	"github.com/akshatsrivastava11/Histograph/internals/types"
@@ -18,13 +20,42 @@ func chromeTimeToUnix(microseconds int64) time.Time {
 	return time.Unix(seconds, 0)
 }
 
+// getChromeHistoryPath returns the path to the Chrome history file for the current OS.
+func GetChromeHistoryPath() (string, error) {
+	// Allow override via environment variable
+	if envPath := os.Getenv("CHROME_HISTORY_PATH"); envPath != "" {
+		return envPath, nil
+	}
+
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "", fmt.Errorf("failed to get user home directory: %w", err)
+	}
+
+	switch runtime.GOOS {
+	case "linux":
+		return filepath.Join(home, ".config", "google-chrome", "Default", "History"), nil
+	case "darwin":
+		return filepath.Join(home, "Library", "Application Support", "Google", "Chrome", "Default", "History"), nil
+	case "windows":
+		return filepath.Join(home, "AppData", "Local", "Google", "Chrome", "User Data", "Default", "History"), nil
+	default:
+		return "", fmt.Errorf("unsupported OS: %s", runtime.GOOS)
+	}
+}
+
 // ParseChromeHistory connects to Chrome's history database and returns a slice of VisitEntry
-func ParseChromeHistory() []types.VisitEntry {
+func ParseChromeHistory() ([]types.VisitEntry, error) {
 	fmt.Println("Parsing Chrome's History")
 
-	db, err := sql.Open("sqlite3", "/home/zeek1108/.config/google-chrome/Default/History")
+	historyPath, err := GetChromeHistoryPath()
 	if err != nil {
-		log.Fatal(err)
+		return nil, err
+	}
+
+	db, err := sql.Open("sqlite3", historyPath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to open Chrome history database: %w", err)
 	}
 	defer db.Close()
 
@@ -36,7 +67,7 @@ func ParseChromeHistory() []types.VisitEntry {
         LIMIT 20;
 	`)
 	if err != nil {
-		log.Fatal(err)
+		return nil, fmt.Errorf("failed to query Chrome history: %w", err)
 	}
 	defer rows.Close()
 
@@ -50,12 +81,11 @@ func ParseChromeHistory() []types.VisitEntry {
 
 		err = rows.Scan(&url, &title, &visitCount, &visitTime)
 		if err != nil {
-			log.Fatal(err)
+			return nil, fmt.Errorf("failed to scan Chrome history row: %w", err)
 		}
 
 		convertedTime := chromeTimeToUnix(visitTime)
 
-		// Add to result slice
 		history = append(history, types.VisitEntry{
 			URL:        url,
 			Title:      title,
@@ -64,5 +94,5 @@ func ParseChromeHistory() []types.VisitEntry {
 		})
 	}
 
-	return history
+	return history, nil
 }
